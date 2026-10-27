@@ -1,0 +1,546 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WII-AI · Windshield YOLO Extractor & Dataset Studio</title>
+  <link rel="stylesheet" href="/static/styles.css?v=20261024-ws1">
+</head>
+<body>
+  <!-- Header matching Video Analytics W1 -->
+  <header>
+    <div class="logo-area">
+      <div class="logo-icon" aria-hidden="true">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 17l2-9h14l2 9H3z"/>
+          <path d="M6 17v2m12-2v2"/>
+          <line x1="12" y1="8" x2="12" y2="17"/>
+        </svg>
+      </div>
+      <div class="title-text">
+        <h1>WII-AI Windshield Studio</h1>
+        <p>YOLO Extraction & Dataset Builder</p>
+      </div>
+    </div>
+
+    <div class="header-status">
+      <!-- Video Source Selector -->
+      <div class="source-picker">
+        <label for="video-dropdown" class="source-label">VIDEO SOURCE</label>
+        <select id="video-dropdown" class="input-field" style="width: 220px;">
+          <option value="">Loading videos...</option>
+        </select>
+        <input type="file" id="video-file-input" accept="video/mp4,video/quicktime,video/x-msvideo,video/x-matroska,video/webm" style="display: none;">
+        <button class="btn btn-secondary btn-sm" id="btn-browse-file">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>
+          Browse File
+        </button>
+      </div>
+      <span id="roi-status-badge" class="badge">ROI: Full Frame</span>
+      <span id="badge-video-status" class="badge">Loading Video...</span>
+      <span id="badge-windshields-count" class="badge success">0 Windshields Extracted</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Workspace Heading -->
+    <div class="workspace-heading">
+      <div>
+        <p class="eyebrow">TRAFFIC VISION / WINDSHIELD YOLO PIPELINE</p>
+        <h2>Extract Vehicle Windshields with YOLO Coordinates</h2>
+        <p class="workspace-description">Ingest traffic footage, isolate specific road lanes or areas alone, select frame processing density, and extract windshield bounding boxes and normalized coordinates using the wind_shield algorithm.</p>
+      </div>
+      <span class="local-badge"><span></span>OWL-ViT + YOLO Active</span>
+    </div>
+
+    <!-- Activity Status Banner -->
+    <div id="activity-card" class="activity-card" aria-busy="false">
+      <div class="activity-icon"><span></span></div>
+      <div class="activity-copy">
+        <strong id="activity-title">Studio Ready</strong>
+        <span id="activity-detail">Select a region of interest, pick frame count, or start extraction below.</span>
+      </div>
+      <span id="activity-state" class="activity-state">IDLE</span>
+      <div class="activity-meter">
+        <div id="activity-progress-bar"></div>
+      </div>
+    </div>
+
+    <!-- Video Metadata Details Bar -->
+    <section>
+      <div class="metadata-grid">
+        <div class="meta-card">
+          <span class="meta-label">Resolution</span>
+          <span class="meta-value" id="meta-resolution">-- x --</span>
+          <span class="meta-sub" id="meta-aspect">Aspect: --</span>
+        </div>
+        <div class="meta-card">
+          <span class="meta-label">Frame Rate</span>
+          <span class="meta-value" id="meta-fps">-- fps</span>
+          <span class="meta-sub">Capture cadence</span>
+        </div>
+        <div class="meta-card">
+          <span class="meta-label">Total Duration</span>
+          <span class="meta-value text-cyan" id="meta-duration">--:--:--</span>
+          <span class="meta-sub" id="meta-frames">0 frames</span>
+        </div>
+        <div class="meta-card">
+          <span class="meta-label">Source File</span>
+          <span class="meta-value" id="meta-filesize">-- MB</span>
+          <span class="meta-sub" id="meta-format">Format: --</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Navigation Tabs -->
+    <nav class="tabs-nav" role="tablist">
+      <button class="tab-btn active" data-tab="tab-roi" id="nav-tab-roi">
+        <span class="tab-number">01</span> Region of Interest (Selected Area)
+      </button>
+      <button class="tab-btn" data-tab="tab-source" id="nav-tab-source">
+        <span class="tab-number">02</span> Frame Selection & Sampling
+      </button>
+      <button class="tab-btn" data-tab="tab-extract" id="nav-tab-extract">
+        <span class="tab-number">03</span> Live Extraction Stream
+      </button>
+      <button class="tab-btn" data-tab="tab-inspector" id="nav-tab-inspector">
+        <span class="tab-number">04</span> Coordinates Inspector & Review
+      </button>
+      <button class="tab-btn" data-tab="tab-export" id="nav-tab-export">
+        <span class="tab-number">05</span> YOLO Dataset & Export Center
+      </button>
+    </nav>
+
+    <!-- TAB 1: Region of Interest (Selected Area Alone) -->
+    <section id="tab-roi" class="tab-content active">
+      <div class="view-split">
+        <!-- Interactive Canvas Stage -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Draw Area to Isolate (Click to add vertices, drag to move)</h3>
+            <span class="badge" id="roi-vertex-count">4 Vertices (Full Frame)</span>
+          </div>
+
+          <div class="video-stage-container" id="roi-canvas-wrapper">
+            <canvas id="roi-canvas"></canvas>
+          </div>
+
+          <!-- Video scrubber for picking a reference frame -->
+          <div class="slider-container" style="margin-top: 0.75rem;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 0.35rem;">
+              <span class="form-helper">Reference Frame for Drawing Area</span>
+              <span class="form-helper" id="roi-frame-label">Frame 0 / 0</span>
+            </div>
+            <input type="range" id="roi-frame-slider" min="0" max="100" value="0" class="timeline-slider">
+          </div>
+
+          <div class="button-row" style="margin-top: 0.5rem;">
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" id="btn-undo-point">Undo Vertex</button>
+              <button class="btn btn-secondary btn-sm" id="btn-clear-roi">Clear Area</button>
+              <button class="btn btn-secondary btn-sm" id="btn-reset-roi">Full Frame</button>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-confirm-roi">
+              Apply Area & Next Step →
+            </button>
+          </div>
+        </div>
+
+        <!-- ROI Quick Presets & Options -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Quick Presets & Isolation Rules</h3>
+          </div>
+
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 1rem;">
+            Extract windshields <strong>strictly inside your chosen polygon</strong> (e.g. entrance lane, specific highway lane, toll gate).
+          </p>
+
+          <label class="form-label">Common Highway & Road Presets</label>
+          <div class="preset-grid" style="grid-template-columns: 1fr 1fr; margin-bottom: 1.25rem;">
+            <button class="btn btn-secondary btn-sm" id="btn-preset-road">
+              🛣️ Main Road (Bottom 65%)
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-preset-left">
+              ◀️ Left Lane
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-preset-right">
+              ▶️ Right Lane
+            </button>
+            <button class="btn btn-secondary btn-sm" id="btn-preset-full">
+              🔲 Full Frame (Reset)
+            </button>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="param-roi-match">Area Matching Rule</label>
+            <select id="param-roi-match" class="input-field">
+              <option value="windshield_center" selected>Windshield Center Inside Area (Default & Recommended)</option>
+              <option value="contact">Vehicle Road Contact Point (Bottom-Center)</option>
+              <option value="windshield_inside">Entire Windshield Strictly Inside Area (All 4 Corners)</option>
+            </select>
+            <span class="form-helper">Determines which vehicles qualify when passing along boundary lines.</span>
+          </div>
+
+          <div class="code-box" style="margin-top: 1rem; font-size: 0.76rem; height: 160px; overflow-y: auto;">
+            <strong>Selected Area Coordinates (Normalized):</strong>
+            <pre id="roi-coords-preview">[[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]]</pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: Frame Selection & Sampling -->
+    <section id="tab-source" class="tab-content">
+      <div class="view-split">
+        <!-- Frame Count & Estimation -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>How Many Frames to Process</h3>
+          </div>
+
+          <p style="font-size: 0.82rem; color: var(--text-secondary); margin-bottom: 0.85rem;">
+            Choose a quick frame density preset or specify exact start and end frame indexes.
+          </p>
+
+          <div class="preset-grid" style="grid-template-columns: repeat(3, 1fr); margin-bottom: 1.25rem;">
+            <button class="btn btn-secondary btn-sm" id="btn-frames-50">⚡ 50 Frames</button>
+            <button class="btn btn-secondary btn-sm" id="btn-frames-100">⚡ 100 Frames</button>
+            <button class="btn btn-secondary btn-sm" id="btn-frames-300">⚡ 300 Frames</button>
+            <button class="btn btn-secondary btn-sm" id="btn-frames-500">⚡ 500 Frames</button>
+            <button class="btn btn-secondary btn-sm" id="btn-frames-1000">⚡ 1,000 Frames</button>
+            <button class="btn btn-secondary btn-sm" id="btn-frames-full">🎬 Full Video</button>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="param-start-frame">Start Frame</label>
+              <input type="number" id="param-start-frame" value="0" min="0" class="input-field">
+            </div>
+            <div class="form-group">
+              <label class="form-label" for="param-end-frame">End Frame</label>
+              <input type="number" id="param-end-frame" value="500" min="1" class="input-field">
+            </div>
+          </div>
+
+          <!-- Estimation Card -->
+          <div style="margin-top: 1.25rem; background-color: rgba(15, 23, 42, 0.6); padding: 1.1rem; border-radius: var(--radius); border: 1px solid var(--border-color);">
+            <h4 style="font-size: 0.85rem; color: var(--accent-blue); margin-bottom: 0.65rem; text-transform: uppercase; letter-spacing: 0.05em;">Live Processing Estimation</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.85rem;">
+              <div>
+                <span class="meta-label">Total Frames to Scan</span>
+                <span class="meta-value text-cyan" id="est-total-frames">100 frames</span>
+              </div>
+              <div>
+                <span class="meta-label">Estimated Total Duration</span>
+                <span class="meta-value" id="est-duration">~15 sec</span>
+              </div>
+              <div style="grid-column: span 2;">
+                <span class="meta-label">Active Scanning Area</span>
+                <span class="meta-value text-green" id="est-active-area">Full Frame (100% of video)</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Sampling Interval & Windshield Threshold -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Sampling Rate & Detection Threshold</h3>
+          </div>
+
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+              <label class="form-label" for="param-frame-step">Sampling Interval</label>
+              <select id="param-frame-step" class="input-field">
+                <option value="1">Every Frame (100% full scan)</option>
+                <option value="3">Every 3rd Frame</option>
+                <option value="5" selected>Every 5th Frame (~0.16s - Recommended)</option>
+                <option value="15">Every 15th Frame (~0.5s)</option>
+                <option value="30">Every 30th Frame (~1.0s)</option>
+                <option value="60">Every 60th Frame (~2.0s)</option>
+              </select>
+              <span class="form-helper">Interval between analyzed frames</span>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="param-windshield-conf">Windshield Confidence</label>
+              <input type="range" id="param-windshield-conf" min="0.05" max="0.60" step="0.02" value="0.15" class="timeline-slider">
+              <span class="form-helper" id="label-windshield-conf">Threshold: 0.15 (OWL-ViT)</span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-top: 0.5rem;">
+            <label style="font-size: 0.82rem; display: flex; align-items: center; gap: 0.35rem; color: #fff;">
+              <input type="checkbox" id="chk-save-frames" checked>
+              Save Frame Images for YOLO Training Set
+            </label>
+          </div>
+
+          <div style="margin-top: 1rem; display: flex; flex-direction: column; gap: 0.5rem;">
+            <button class="btn btn-primary" id="btn-start-extract" style="padding: 0.85rem; font-size: 0.95rem;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              Start Windshield Extraction
+            </button>
+            <span class="form-helper" style="text-align: center;">Extracts only within selected area and normalizes coordinates for YOLO.</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: Live Extraction Stream -->
+    <section id="tab-extract" class="tab-content">
+      <div class="view-split">
+        <!-- Live Stream Canvas -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Live Annotated Extraction View</h3>
+            <span class="badge" id="live-stream-badge">Waiting to Start</span>
+          </div>
+
+          <div class="video-stage-container">
+            <img id="live-frame-img" src="/static/placeholder.jpg" alt="Live Processing Stream" style="display: none;">
+            <div id="live-placeholder-box" style="text-align: center; padding: 2rem; color: var(--text-muted);">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="margin-bottom: 0.75rem;"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+              <p>No extraction currently running.</p>
+              <p style="font-size: 0.8rem; margin-top: 0.25rem;">Click "Start Windshield Extraction" to stream real-time bounding boxes and selected area overlay here.</p>
+            </div>
+          </div>
+
+          <div class="button-row" style="margin-top: 0.5rem;">
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" id="btn-pause-extract">Pause</button>
+              <button class="btn btn-secondary btn-sm" id="btn-resume-extract">Resume</button>
+              <button class="btn btn-danger btn-sm" id="btn-stop-extract">Stop Job</button>
+            </div>
+            <button class="btn btn-secondary btn-sm" id="btn-goto-inspector">
+              Review Extracted Coordinates in Inspector →
+            </button>
+          </div>
+        </div>
+
+        <!-- Real-time Stats & Telemetry -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Extraction Telemetry</h3>
+            <span class="badge warning" id="telemetry-status-pill">Idle</span>
+          </div>
+
+          <div class="metadata-grid" style="grid-template-columns: 1fr 1fr;">
+            <div class="meta-card">
+              <span class="meta-label">Windshields Localized</span>
+              <span class="meta-value text-cyan" id="stat-windshields-found">0</span>
+              <span class="meta-sub">Bounding boxes in selected area</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Frames Processed</span>
+              <span class="meta-value text-green" id="stat-frames-done">0</span>
+              <span class="meta-sub" id="stat-frames-total">of 0 frames</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Processing Speed</span>
+              <span class="meta-value" id="stat-fps">0.0 fps</span>
+              <span class="meta-sub">Frames per second</span>
+            </div>
+            <div class="meta-card">
+              <span class="meta-label">Estimated Time Left</span>
+              <span class="meta-value text-amber" id="stat-eta">0s</span>
+              <span class="meta-sub">ETA calculation</span>
+            </div>
+          </div>
+
+          <div class="code-box" id="live-console-log" style="height: 140px; overflow-y: auto;">
+[System] Ready for video analysis.
+[Algorithm] OWL-ViT zero-shot detector ('a car windshield', 'a front windscreen', 'a rear windshield').
+[Workflow] Step 1: Set Area (ROI) -> Step 2: Choose Frame Count -> Step 3: Extract -> Step 4: Export YOLO Dataset.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: Frame & Coordinates Inspector -->
+    <section id="tab-inspector" class="tab-content">
+      <div class="view-split">
+        <!-- Interactive Frame Canvas -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Frame Canvas & Coordinate Overlays</h3>
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" id="btn-prev-windshield-frame">◀ Prev Windshield Frame</button>
+              <span class="badge" id="inspector-frame-badge">Frame: --</span>
+              <button class="btn btn-secondary btn-sm" id="btn-next-windshield-frame">Next Windshield Frame ▶</button>
+            </div>
+          </div>
+
+          <div class="video-stage-container" style="position: relative;">
+            <canvas id="inspector-canvas"></canvas>
+          </div>
+
+          <div class="stage-header" style="border: none; padding-bottom: 0;">
+            <span class="form-helper" id="canvas-help-text">Click any windshield bounding box to highlight its YOLO coordinates.</span>
+            <span class="plate-yolo-tag" id="inspector-yolo-preview">YOLO: 0 &lt;x_center&gt; &lt;y_center&gt; &lt;width&gt; &lt;height&gt;</span>
+          </div>
+        </div>
+
+        <!-- Extracted Windshields List & Table -->
+        <div class="stage-card">
+          <div class="stage-header">
+            <h3>Extracted Windshields in Selected Area (<span id="inspector-total-count">0</span>)</h3>
+            <div class="btn-group">
+              <button class="btn btn-secondary btn-sm" id="btn-refresh-windshields">Refresh</button>
+              <button class="btn btn-danger btn-sm" id="btn-clear-windshields">Clear All</button>
+            </div>
+          </div>
+
+          <input type="text" id="filter-windshield-text" placeholder="Filter by vehicle type or frame number..." class="input-field">
+
+          <div class="plate-list-container" id="windshields-container">
+            <div style="padding: 2rem; text-align: center; color: var(--text-muted);">
+              No windshields extracted yet. Set area and run extraction in Tab 01 or 02.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 5: YOLO Dataset & Export Center -->
+    <section id="tab-export" class="tab-content">
+      <div class="workspace-heading" style="margin-bottom: 0.5rem;">
+        <div>
+          <p class="eyebrow">STEP 05 / EXPORT ENGINE</p>
+          <h2>Export YOLO-Ready Data & Coordinates</h2>
+          <p class="workspace-description">Everything needed to train or fine-tune YOLO models immediately on your extracted windshields.</p>
+        </div>
+      </div>
+
+      <div class="export-grid">
+        <!-- Export Option 1: Full YOLO Training Dataset ZIP -->
+        <div class="export-card">
+          <div>
+            <div class="export-card-header">
+              <div class="export-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+              </div>
+              <div>
+                <h4>Full YOLO Dataset (ZIP)</h4>
+                <p>Complete dataset archive: <span class="text-cyan">images/train</span>, <span class="text-cyan">images/val</span>, normalized <span class="text-cyan">labels/*.txt</span>, and <span class="text-cyan">data.yaml</span>.</p>
+              </div>
+            </div>
+
+            <div style="margin-top: 1rem;">
+              <label class="form-label">Train / Validation Split</label>
+              <div style="display: flex; align-items: center; gap: 0.75rem; margin-top: 0.35rem;">
+                <input type="range" id="export-split-slider" min="0.5" max="1.0" step="0.05" value="0.8" class="timeline-slider">
+                <span class="badge" id="export-split-label">80% Train / 20% Val</span>
+              </div>
+            </div>
+          </div>
+
+          <a href="/api/export/yolo" class="btn btn-primary" id="btn-download-yolo-zip" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download Full YOLO Dataset (.zip)
+          </a>
+        </div>
+
+        <!-- Export Option 2: Coordinates CSV -->
+        <div class="export-card">
+          <div>
+            <div class="export-card-header">
+              <div class="export-icon green">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+              </div>
+              <div>
+                <h4>Coordinates CSV Spreadsheet</h4>
+                <p>Tabular dataset with frame index, timestamp, pixel bounds (x1, y1, x2, y2), 4 corners, and normalized YOLO coordinates.</p>
+              </div>
+            </div>
+
+            <p style="margin-top: 1rem; font-size: 0.78rem; color: var(--text-muted);">
+              Columns: frame_index, timestamp, x1, y1, x2, y2, x_center_norm, y_center_norm, width_norm, height_norm, 4 corners, confidence, vehicle_type.
+            </p>
+          </div>
+
+          <a href="/api/export/csv" class="btn btn-secondary" id="btn-download-csv" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download Coordinates (.csv)
+          </a>
+        </div>
+
+        <!-- Export Option 3: Structured JSON Annotations -->
+        <div class="export-card">
+          <div>
+            <div class="export-card-header">
+              <div class="export-icon amber">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 18l6-6-6-6M8 6l-6 6 6 6"/></svg>
+              </div>
+              <div>
+                <h4>Structured JSON Annotations</h4>
+                <p>Complete machine-readable JSON containing video metadata, frame dimensions, 4 corners, and bounding box coordinates for custom ML pipelines.</p>
+              </div>
+            </div>
+
+            <p style="margin-top: 1rem; font-size: 0.78rem; color: var(--text-muted);">
+              JSON structure containing dataset configuration, class names, video specs, and per-frame windshield coordinate dictionaries.
+            </p>
+          </div>
+
+          <a href="/api/export/json" class="btn btn-secondary" id="btn-download-json" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download JSON Annotations (.json)
+          </a>
+        </div>
+
+        <!-- Export Option 4: YOLO Labels Only (.zip) -->
+        <div class="export-card">
+          <div>
+            <div class="export-card-header">
+              <div class="export-icon cyan">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              </div>
+              <div>
+                <h4>YOLO Labels Only (.zip)</h4>
+                <p>Normalized label files (<span class="text-cyan">labels/frame_XXXXXX.txt</span>) and <span class="text-cyan">data.yaml</span> for pre-saved video frames.</p>
+              </div>
+            </div>
+
+            <p style="margin-top: 1rem; font-size: 0.78rem; color: var(--text-muted);">
+              Format: <code>0 &lt;x_center&gt; &lt;y_center&gt; &lt;width&gt; &lt;height&gt;</code> normalized to <code>[0.0, 1.0]</code>.
+            </p>
+          </div>
+
+          <a href="/api/export/labels-zip" class="btn btn-secondary" id="btn-download-labels-zip" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download Labels (.zip)
+          </a>
+        </div>
+
+        <!-- Export Option 5: Cropped Windshields (.zip) -->
+        <div class="export-card">
+          <div>
+            <div class="export-card-header">
+              <div class="export-icon purple">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+              </div>
+              <div>
+                <h4>Cropped Windshield Images (.zip)</h4>
+                <p>Full-resolution cropped windshield regions for inspection, classification, or training specialized glass models.</p>
+              </div>
+            </div>
+
+            <p style="margin-top: 1rem; font-size: 0.78rem; color: var(--text-muted);">
+              Individual JPEG image files extracted directly from the video frames.
+            </p>
+          </div>
+
+          <a href="/api/export/crops-zip" class="btn btn-secondary" id="btn-download-crops-zip" download>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            Download Cropped Windshields (.zip)
+          </a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script src="/static/app.js?v=20261024-ws2"></script>
+</body>
+</html>

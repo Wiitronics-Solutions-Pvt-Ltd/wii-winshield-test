@@ -1,0 +1,39 @@
+# OS and editor files
+.DS_Store
+._*
+Thumbs.db
+.idea/
+*.swp
+*.swo
+
+# Python bytecode, environments, and tooling caches
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+build/
+dist/
+*.egg-info/
+
+# Local configuration and logs
+.env
+.env.*
+!.env.example
+!.env.sample
+*.log
+
+# Uploaded footage and generated frames, crops, and datasets
+/VA_winshield v1/uploads/
+/VA_winshield v1/output/
+/VA_winshield v1/runs/
+
+# Downloaded model weights and machine-specific sample video link
+*.pt
+/VA_winshield v1/sample_video.mp4
